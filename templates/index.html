@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Documents Flagger</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #1a1d2e;
+      border-bottom: 1px solid #2d3148;
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header .logo { font-size: 22px; font-weight: 700; color: #7c6af7; }
+    header .subtitle { font-size: 13px; color: #64748b; }
+
+    /* ── Main layout ── */
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ── Input card ── */
+    .card {
+      background: #1a1d2e;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .card h2 { font-size: 15px; font-weight: 600; color: #94a3b8; margin-bottom: 16px; text-transform: uppercase; letter-spacing: .05em; }
+
+    .input-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .url-input {
+      flex: 1;
+      min-width: 260px;
+      background: #0f1117;
+      border: 1px solid #2d3148;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 14px;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .url-input:focus { border-color: #7c6af7; }
+    .url-input::placeholder { color: #475569; }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #94a3b8;
+      white-space: nowrap;
+      padding: 10px 0;
+    }
+    .toggle-label input[type="checkbox"] { accent-color: #7c6af7; width: 16px; height: 16px; }
+
+    .btn {
+      background: #7c6af7;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 22px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s, opacity .2s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: #6455e0; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid #7c6af7;
+      color: #7c6af7;
+    }
+    .btn-outline:hover { background: #7c6af715; }
+
+    /* ── Progress bar ── */
+    #progressWrap { display: none; margin-top: 16px; }
+    .progress-bar-bg {
+      background: #0f1117;
+      border-radius: 99px;
+      height: 6px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #7c6af7, #a78bfa);
+      border-radius: 99px;
+      width: 0%;
+      transition: width .3s;
+    }
+    #progressLabel { font-size: 13px; color: #64748b; }
+
+    /* ── Status log ── */
+    #statusLog {
+      display: none;
+      background: #0f1117;
+      border: 1px solid #1e2235;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 12px;
+      font-family: monospace;
+      color: #64748b;
+      max-height: 120px;
+      overflow-y: auto;
+      margin-top: 12px;
+    }
+    #statusLog p { margin: 2px 0; }
+
+    /* ── Summary bar ── */
+    #summaryBar {
+      display: none;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .stat-chip {
+      flex: 1;
+      min-width: 110px;
+      background: #1a1d2e;
+      border: 1px solid #2d3148;
+      border-radius: 10px;
+      padding: 14px 18px;
+      text-align: center;
+    }
+    .stat-chip .val { font-size: 28px; font-weight: 700; }
+    .stat-chip .lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .chip-total .val { color: #7c6af7; }
+    .chip-high   .val { color: #f87171; }
+    .chip-medium .val { color: #fb923c; }
+    .chip-low    .val { color: #facc15; }
+    .chip-safe   .val { color: #4ade80; }
+
+    /* ── Results list ── */
+    #resultsList { display: flex; flex-direction: column; gap: 16px; }
+
+    .result-card {
+      background: #1a1d2e;
+      border: 1px solid #2d3148;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .result-header:hover { background: #1e2235; }
+    .risk-badge {
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 99px;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      white-space: nowrap;
+    }
+    .risk-High   { background: #7f1d1d; color: #fca5a5; }
+    .risk-Medium { background: #7c2d12; color: #fdba74; }
+    .risk-Low    { background: #713f12; color: #fde047; }
+    .risk-Safe   { background: #14532d; color: #86efac; }
+
+    .file-name { font-size: 14px; font-weight: 600; flex: 1; word-break: break-all; }
+    .file-path { font-size: 12px; color: #475569; }
+    .chevron { font-size: 18px; color: #475569; transition: transform .2s; }
+    .chevron.open { transform: rotate(180deg); }
+
+    .result-body { display: none; padding: 0 18px 18px; }
+    .result-body.open { display: block; }
+
+    /* ── Tenant section ── */
+    .section-title {
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      margin: 14px 0 8px;
+    }
+    .section-title.tenants { color: #60a5fa; }
+    .section-title.security { color: #f87171; }
+    .section-title.rec { color: #94a3b8; }
+
+    .tenant-chip {
+      display: inline-block;
+      background: #1e3a5f;
+      color: #93c5fd;
+      border: 1px solid #2563eb55;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 12px;
+      margin: 3px 4px 3px 0;
+    }
+    .tenant-chip .count { font-weight: 700; }
+
+    .excerpt {
+      background: #0f1117;
+      border-left: 3px solid #2d3148;
+      border-radius: 0 4px 4px 0;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-family: monospace;
+      color: #94a3b8;
+      margin: 4px 0;
+      word-break: break-word;
+    }
+
+    /* ── Security table ── */
+    .sec-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+    .sec-table th {
+      text-align: left;
+      color: #475569;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      padding: 6px 10px;
+      border-bottom: 1px solid #2d3148;
+    }
+    .sec-table td { padding: 8px 10px; border-bottom: 1px solid #1e2235; vertical-align: top; }
+    .sec-table tr:last-child td { border-bottom: none; }
+    .sev-High   { color: #f87171; font-weight: 700; }
+    .sev-Medium { color: #fb923c; font-weight: 700; }
+    .sev-Low    { color: #facc15; font-weight: 700; }
+    .sec-excerpt { font-family: monospace; font-size: 12px; color: #94a3b8; word-break: break-all; }
+
+    .rec-box {
+      background: #0f1117;
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #e2e8f0;
+      margin-top: 4px;
+    }
+    .rec-hold { border-left: 3px solid #f87171; }
+    .rec-clear { border-left: 3px solid #4ade80; }
+
+    /* ── Empty / error states ── */
+    #emptyState {
+      display: none;
+      text-align: center;
+      padding: 48px;
+      color: #475569;
+      font-size: 15px;
+    }
+    .error-banner {
+      background: #450a0a;
+      border: 1px solid #7f1d1d;
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: #fca5a5;
+      font-size: 14px;
+      margin-bottom: 16px;
+      display: none;
+    }
+
+    /* ── Download button ── */
+    #downloadRow { display: none; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="logo">&#128681; Documents Flagger</div>
+    <div class="subtitle">Tenant name detection &amp; sensitive data scanner</div>
+  </div>
+</header>
+
+<main>
+
+  <!-- Input card -->
+  <div class="card">
+    <h2>Scan a Google Drive Folder</h2>
+    <div class="input-row">
+      <input
+        id="folderUrl"
+        class="url-input"
+        type="text"
+        placeholder="Paste Google Drive folder URL  e.g. https://drive.google.com/drive/folders/…"
+      />
+      <label class="toggle-label">
+        <input type="checkbox" id="includeSubfolders" />
+        Include subfolders
+      </label>
+      <button class="btn" id="scanBtn" onclick="startScan()">Scan</button>
+    </div>
+
+    <!-- Progress -->
+    <div id="progressWrap">
+      <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+      <div id="progressLabel">Preparing…</div>
+    </div>
+    <div id="statusLog"></div>
+  </div>
+
+  <!-- Error banner -->
+  <div class="error-banner" id="errorBanner"></div>
+
+  <!-- Summary chips -->
+  <div id="summaryBar" style="display:none; gap:12px; flex-wrap:wrap; margin-bottom:24px;">
+    <div class="stat-chip chip-total"><div class="val" id="statTotal">0</div><div class="lbl">Scanned</div></div>
+    <div class="stat-chip chip-high"><div class="val" id="statHigh">0</div><div class="lbl">High Risk</div></div>
+    <div class="stat-chip chip-medium"><div class="val" id="statMed">0</div><div class="lbl">Medium Risk</div></div>
+    <div class="stat-chip chip-low"><div class="val" id="statLow">0</div><div class="lbl">Low Risk</div></div>
+    <div class="stat-chip chip-safe"><div class="val" id="statSafe">0</div><div class="lbl">Safe</div></div>
+  </div>
+
+  <!-- Download -->
+  <div id="downloadRow">
+    <a id="downloadLink" href="/download_report" class="btn btn-outline" style="display:inline-block; text-decoration:none;">
+      ⬇ Download JSON Report
+    </a>
+  </div>
+
+  <!-- Results -->
+  <div id="emptyState">No documents found or all were skipped (unsupported file types).</div>
+  <div id="resultsList"></div>
+
+</main>
+
+<script>
+  let evtSource = null;
+  const counts = { total: 0, High: 0, Medium: 0, Low: 0, Safe: 0 };
+
+  function resetUI() {
+    document.getElementById('resultsList').innerHTML = '';
+    document.getElementById('statusLog').innerHTML = '';
+    document.getElementById('statusLog').style.display = 'none';
+    document.getElementById('errorBanner').style.display = 'none';
+    document.getElementById('summaryBar').style.display = 'none';
+    document.getElementById('downloadRow').style.display = 'none';
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('progressWrap').style.display = 'none';
+    document.getElementById('progressFill').style.width = '0%';
+    Object.keys(counts).forEach(k => counts[k] = 0);
+  }
+
+  function updateSummary() {
+    document.getElementById('statTotal').textContent = counts.total;
+    document.getElementById('statHigh').textContent  = counts.High;
+    document.getElementById('statMed').textContent   = counts.Medium;
+    document.getElementById('statLow').textContent   = counts.Low;
+    document.getElementById('statSafe').textContent  = counts.Safe;
+  }
+
+  function logStatus(msg) {
+    const log = document.getElementById('statusLog');
+    log.style.display = 'block';
+    const p = document.createElement('p');
+    p.textContent = '› ' + msg;
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  function startScan() {
+    const url = document.getElementById('folderUrl').value.trim();
+    if (!url) { alert('Please paste a Google Drive folder URL.'); return; }
+
+    if (evtSource) { evtSource.close(); evtSource = null; }
+    resetUI();
+
+    document.getElementById('scanBtn').disabled = true;
+    document.getElementById('progressWrap').style.display = 'block';
+    document.getElementById('progressLabel').textContent = 'Connecting…';
+
+    const subfolders = document.getElementById('includeSubfolders').checked;
+    const params = new URLSearchParams({ url, subfolders });
+    evtSource = new EventSource('/scan?' + params.toString());
+
+    evtSource.addEventListener('status', e => {
+      const d = JSON.parse(e.data);
+      logStatus(d.message);
+      document.getElementById('progressLabel').textContent = d.message;
+    });
+
+    evtSource.addEventListener('progress', e => {
+      const d = JSON.parse(e.data);
+      const pct = Math.round((d.current / d.total) * 100);
+      document.getElementById('progressFill').style.width = pct + '%';
+      document.getElementById('progressLabel').textContent =
+        `[${d.current}/${d.total}]  ${d.path ? d.path + '/' : ''}${d.file}`;
+    });
+
+    evtSource.addEventListener('result', e => {
+      const r = JSON.parse(e.data);
+      counts.total++;
+      counts[r.overall_risk] = (counts[r.overall_risk] || 0) + 1;
+      document.getElementById('summaryBar').style.display = 'flex';
+      updateSummary();
+      renderResult(r);
+    });
+
+    evtSource.addEventListener('error', e => {
+      try {
+        const d = JSON.parse(e.data);
+        showError(d.message);
+      } catch (_) {
+        showError('An unexpected error occurred. Check the terminal for details.');
+      }
+      finish();
+    });
+
+    evtSource.addEventListener('done', e => {
+      const d = JSON.parse(e.data);
+      if (d.total === 0) document.getElementById('emptyState').style.display = 'block';
+      document.getElementById('progressLabel').textContent = `Done — ${d.total} document(s) scanned.`;
+      document.getElementById('progressFill').style.width = '100%';
+      if (d.total > 0) document.getElementById('downloadRow').style.display = 'block';
+      finish();
+    });
+  }
+
+  function finish() {
+    document.getElementById('scanBtn').disabled = false;
+    if (evtSource) { evtSource.close(); evtSource = null; }
+  }
+
+  function showError(msg) {
+    const b = document.getElementById('errorBanner');
+    b.textContent = '⚠ ' + msg;
+    b.style.display = 'block';
+    document.getElementById('progressLabel').textContent = 'Error — see above.';
+  }
+
+  function renderResult(r) {
+    const card = document.createElement('div');
+    card.className = 'result-card';
+
+    const isHold = r.recommendation.startsWith('Hold');
+
+    // Header
+    card.innerHTML = `
+      <div class="result-header" onclick="toggleCard(this)">
+        <span class="risk-badge risk-${r.overall_risk}">${r.overall_risk}</span>
+        <span class="file-name">${esc(r.file_name)}</span>
+        ${r.subfolder_path ? `<span class="file-path">📁 ${esc(r.subfolder_path)}</span>` : ''}
+        <span class="chevron">▾</span>
+      </div>
+      <div class="result-body">
+        ${renderTenants(r.tenant_matches)}
+        ${renderSecurity(r.security_findings)}
+        <div class="section-title rec">Recommendation</div>
+        <div class="rec-box ${isHold ? 'rec-hold' : 'rec-clear'}">${esc(r.recommendation)}</div>
+      </div>
+    `;
+
+    document.getElementById('resultsList').appendChild(card);
+  }
+
+  function renderTenants(matches) {
+    if (!matches || !matches.length) return `<div class="section-title tenants">Tenants</div><p style="font-size:13px;color:#475569;margin-top:4px;">No tenant names detected.</p>`;
+    let html = `<div class="section-title tenants">Tenant Names Found (${matches.length})</div>`;
+    matches.forEach(m => {
+      html += `<div style="margin-bottom:8px;">
+        <span class="tenant-chip"><span class="count">${m.occurrences}×</span>  ${esc(m.tenant_name)}</span>
+        ${m.excerpts.slice(0,2).map(ex => `<div class="excerpt">${esc(ex)}</div>`).join('')}
+      </div>`;
+    });
+    return html;
+  }
+
+  function renderSecurity(findings) {
+    if (!findings || !findings.length) return `<div class="section-title security">Security</div><p style="font-size:13px;color:#475569;margin-top:4px;">No security issues detected.</p>`;
+    let rows = findings.map(f => `
+      <tr>
+        <td class="sev-${f.severity}">${f.severity}</td>
+        <td>${esc(f.category)}</td>
+        <td>${esc(f.description)}</td>
+        <td class="sec-excerpt">${esc(f.excerpt)}</td>
+      </tr>`).join('');
+    return `
+      <div class="section-title security">Security Findings (${findings.length})</div>
+      <table class="sec-table">
+        <thead><tr><th>Severity</th><th>Category</th><th>Type</th><th>Excerpt</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function toggleCard(header) {
+    const body = header.nextElementSibling;
+    const chevron = header.querySelector('.chevron');
+    body.classList.toggle('open');
+    chevron.classList.toggle('open');
+  }
+
+  function esc(str) {
+    return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // Allow pressing Enter in the URL field
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('folderUrl').addEventListener('keydown', e => {
+      if (e.key === 'Enter') startScan();
+    });
+  });
+</script>
+</body>
+</html>

@@ -8,8 +8,7 @@ from googleapiclient.http import MediaIoBaseDownload
 
 from config import SCOPES, TOKEN_FILE, CREDENTIALS_FILE
 
-# Required for Shared Drive (Team Drive) access
-_SHARED_DRIVE_PARAMS = {
+_SHARED = {
     "includeItemsFromAllDrives": True,
     "supportsAllDrives": True,
 }
@@ -37,7 +36,6 @@ def authenticate() -> object:
 
 
 def list_root_folders(service) -> list[dict]:
-    """Return all top-level folders visible to this account (My Drive + Shared Drives)."""
     folders = []
     page_token = None
     while True:
@@ -45,7 +43,7 @@ def list_root_folders(service) -> list[dict]:
             "q": "mimeType='application/vnd.google-apps.folder' and trashed=false and 'root' in parents",
             "fields": "nextPageToken, files(id, name)",
             "pageSize": 100,
-            **_SHARED_DRIVE_PARAMS,
+            **_SHARED,
         }
         if page_token:
             params["pageToken"] = page_token
@@ -54,15 +52,12 @@ def list_root_folders(service) -> list[dict]:
         page_token = response.get("nextPageToken")
         if not page_token:
             break
-
-    # Also list Shared Drives themselves as top-level entries
     try:
-        sd_response = service.drives().list(fields="drives(id, name)").execute()
-        for drive in sd_response.get("drives", []):
-            folders.append({"id": drive["id"], "name": f"[Shared Drive] {drive['name']}"})
+        sd = service.drives().list(fields="drives(id, name)").execute()
+        for d in sd.get("drives", []):
+            folders.append({"id": d["id"], "name": f"[Shared Drive] {d['name']}"})
     except Exception:
         pass
-
     return folders
 
 
@@ -70,12 +65,7 @@ def find_folder_id(service, name: str, parent_id: str = None) -> str | None:
     query = f"name='{name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
     if parent_id:
         query += f" and '{parent_id}' in parents"
-    params = {
-        "q": query,
-        "fields": "files(id, name)",
-        **_SHARED_DRIVE_PARAMS,
-    }
-    results = service.files().list(**params).execute()
+    results = service.files().list(q=query, fields="files(id, name)", **_SHARED).execute()
     files = results.get("files", [])
     return files[0]["id"] if files else None
 
@@ -102,7 +92,7 @@ def list_files_in_folder(service, folder_id: str) -> list[dict]:
             "q": f"'{folder_id}' in parents and trashed=false",
             "fields": "nextPageToken, files(id, name, mimeType, size)",
             "pageSize": 100,
-            **_SHARED_DRIVE_PARAMS,
+            **_SHARED,
         }
         if page_token:
             params["pageToken"] = page_token
@@ -114,6 +104,24 @@ def list_files_in_folder(service, folder_id: str) -> list[dict]:
     return files
 
 
+def collect_files_recursive(service, folder_id: str, _path: str = "", yield_status: bool = False):
+    """
+    Recursively yield all files under a folder.
+    Each yielded item is a file metadata dict with an added 'subfolder_path' key.
+    When yield_status=True, also yields string status messages (for SSE streaming).
+    """
+    items = list_files_in_folder(service, folder_id)
+    for item in items:
+        if item.get("mimeType") == "application/vnd.google-apps.folder":
+            sub_path = f"{_path}/{item['name']}" if _path else item["name"]
+            if yield_status:
+                yield f"Entering subfolder: {sub_path}"
+            yield from collect_files_recursive(service, item["id"], sub_path, yield_status)
+        else:
+            item["subfolder_path"] = _path
+            yield item
+
+
 def download_file(service, file_id: str, mime_type: str) -> bytes:
     google_export_map = {
         "application/vnd.google-apps.document": "text/plain",
@@ -121,12 +129,11 @@ def download_file(service, file_id: str, mime_type: str) -> bytes:
         "application/vnd.google-apps.presentation": "text/plain",
     }
     if mime_type in google_export_map:
-        export_mime = google_export_map[mime_type]
-        request = service.files().export_media(fileId=file_id, mimeType=export_mime)
+        request = service.files().export_media(fileId=file_id, mimeType=google_export_map[mime_type])
     else:
-        request = service.files().get_media(fileId=file_id, **_SHARED_DRIVE_PARAMS)
+        request = service.files().get_media(fileId=file_id, **_SHARED)
     buffer = io.BytesIO()
-    downloader = MediaIoBaseDownload(buffer, request)
+    downloader = MediaIoBaseDownload(buffer, request, chunksize=10 * 1024 * 1024)
     done = False
     while not done:
         _, done = downloader.next_chunk()

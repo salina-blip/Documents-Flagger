@@ -107,36 +107,29 @@ def print_summary(results: list[ScanResult], folder_path: str, duration_seconds:
     print(f"\n{'#'*70}\n")
 
 
-def save_json_report(results: list[ScanResult], output_path: str) -> None:
-    data = {
-        "generated_at": datetime.now().isoformat(),
-        "documents": [
+def save_json_report(results: list[ScanResult], output_path: str, raw: list[dict] = None) -> None:
+    if raw is not None:
+        # Called from web app with pre-serialised dicts
+        documents = raw
+    else:
+        documents = [
             {
                 "file_name": r.file_name,
                 "overall_risk": r.overall_risk,
                 "recommendation": r.recommendation,
                 "extraction_error": r.extraction_error,
                 "tenant_matches": [
-                    {
-                        "tenant_name": tm.tenant_name,
-                        "occurrences": tm.occurrences,
-                        "excerpts": tm.excerpts,
-                    }
+                    {"tenant_name": tm.tenant_name, "occurrences": tm.occurrences, "excerpts": tm.excerpts}
                     for tm in r.tenant_matches
                 ],
                 "security_findings": [
-                    {
-                        "category": f.category,
-                        "description": f.description,
-                        "excerpt": f.excerpt,
-                        "severity": f.severity,
-                    }
+                    {"category": f.category, "description": f.description, "excerpt": f.excerpt, "severity": f.severity}
                     for f in r.security_findings
                 ],
             }
             for r in results
-        ],
-    }
+        ]
+    data = {"generated_at": datetime.now().isoformat(), "documents": documents}
     with open(output_path, "w", encoding="utf-8") as fh:
         json.dump(data, fh, indent=2, ensure_ascii=False)
     print(f"  JSON report saved → {output_path}")
