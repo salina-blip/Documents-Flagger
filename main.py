@@ -11,7 +11,7 @@ import time
 import argparse
 
 from config import GOOGLE_DRIVE_FOLDER_PATH
-from drive_client import authenticate, resolve_folder_path, list_files_in_folder, download_file
+from drive_client import authenticate, resolve_folder_path, list_files_in_folder, download_file, list_root_folders
 from document_extractor import extract_text, SUPPORTED_MIME_TYPES
 from scanner import scan_document
 from reporter import print_document_report, print_summary, save_json_report
@@ -38,6 +38,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Override the Drive folder path as a slash-separated string, e.g. 'Documentation/102 Documents'",
     )
+    parser.add_argument(
+        "--list-folders",
+        action="store_true",
+        help="List all top-level folders in your Drive and exit (use to find correct folder name)",
+    )
     return parser.parse_args()
 
 
@@ -58,6 +63,13 @@ def main() -> None:
     except FileNotFoundError as exc:
         print(f"\n  ERROR: {exc}\n")
         sys.exit(1)
+
+    if args.list_folders:
+        print(f"  Top-level folders visible to this account:\n")
+        for f in list_root_folders(service):
+            print(f"    • {f['name']}  (id: {f['id']})")
+        print()
+        sys.exit(0)
 
     print(f"  Resolving folder path…")
     try:

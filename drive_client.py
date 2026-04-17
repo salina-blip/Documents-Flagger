@@ -8,6 +8,12 @@ from googleapiclient.http import MediaIoBaseDownload
 
 from config import SCOPES, TOKEN_FILE, CREDENTIALS_FILE
 
+# Required for Shared Drive (Team Drive) access
+_SHARED_DRIVE_PARAMS = {
+    "includeItemsFromAllDrives": True,
+    "supportsAllDrives": True,
+}
+
 
 def authenticate() -> object:
     creds = None
@@ -30,11 +36,46 @@ def authenticate() -> object:
     return build("drive", "v3", credentials=creds)
 
 
+def list_root_folders(service) -> list[dict]:
+    """Return all top-level folders visible to this account (My Drive + Shared Drives)."""
+    folders = []
+    page_token = None
+    while True:
+        params = {
+            "q": "mimeType='application/vnd.google-apps.folder' and trashed=false and 'root' in parents",
+            "fields": "nextPageToken, files(id, name)",
+            "pageSize": 100,
+            **_SHARED_DRIVE_PARAMS,
+        }
+        if page_token:
+            params["pageToken"] = page_token
+        response = service.files().list(**params).execute()
+        folders.extend(response.get("files", []))
+        page_token = response.get("nextPageToken")
+        if not page_token:
+            break
+
+    # Also list Shared Drives themselves as top-level entries
+    try:
+        sd_response = service.drives().list(fields="drives(id, name)").execute()
+        for drive in sd_response.get("drives", []):
+            folders.append({"id": drive["id"], "name": f"[Shared Drive] {drive['name']}"})
+    except Exception:
+        pass
+
+    return folders
+
+
 def find_folder_id(service, name: str, parent_id: str = None) -> str | None:
     query = f"name='{name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
     if parent_id:
         query += f" and '{parent_id}' in parents"
-    results = service.files().list(q=query, fields="files(id, name)").execute()
+    params = {
+        "q": query,
+        "fields": "files(id, name)",
+        **_SHARED_DRIVE_PARAMS,
+    }
+    results = service.files().list(**params).execute()
     files = results.get("files", [])
     return files[0]["id"] if files else None
 
@@ -46,8 +87,8 @@ def resolve_folder_path(service, path: list[str]) -> str:
         if not folder_id:
             raise FileNotFoundError(
                 f"Folder '{folder_name}' not found"
-                + (f" inside parent '{path[path.index(folder_name)-1]}'" if parent_id else "")
-                + ". Verify the folder name and your Drive permissions."
+                + (f" inside '{path[path.index(folder_name)-1]}'" if parent_id else " in your Drive")
+                + ". Run with --list-folders to see available top-level folders."
             )
         parent_id = folder_id
     return parent_id
@@ -61,6 +102,7 @@ def list_files_in_folder(service, folder_id: str) -> list[dict]:
             "q": f"'{folder_id}' in parents and trashed=false",
             "fields": "nextPageToken, files(id, name, mimeType, size)",
             "pageSize": 100,
+            **_SHARED_DRIVE_PARAMS,
         }
         if page_token:
             params["pageToken"] = page_token
@@ -73,7 +115,6 @@ def list_files_in_folder(service, folder_id: str) -> list[dict]:
 
 
 def download_file(service, file_id: str, mime_type: str) -> bytes:
-    # Google Workspace files must be exported; binary files downloaded directly
     google_export_map = {
         "application/vnd.google-apps.document": "text/plain",
         "application/vnd.google-apps.spreadsheet": "text/csv",
@@ -83,7 +124,7 @@ def download_file(service, file_id: str, mime_type: str) -> bytes:
         export_mime = google_export_map[mime_type]
         request = service.files().export_media(fileId=file_id, mimeType=export_mime)
     else:
-        request = service.files().get_media(fileId=file_id)
+        request = service.files().get_media(fileId=file_id, **_SHARED_DRIVE_PARAMS)
     buffer = io.BytesIO()
     downloader = MediaIoBaseDownload(buffer, request)
     done = False
