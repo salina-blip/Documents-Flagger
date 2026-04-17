@@ -1,0 +1,8 @@
+credentials.json
+token.json
+scan_report.json
+__pycache__/
+*.py[cod]
+.env
+venv/
+.venv/
