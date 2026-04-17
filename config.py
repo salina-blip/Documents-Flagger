@@ -42,6 +42,26 @@ TENANT_NAMES = [
     "California fuels",
 ]
 
+# Pricing matches within 150 chars of any of these phrases are treated as
+# feature-documentation references and suppressed from Internal Pricing findings.
+FEATURE_PRICING_EXCLUSION_RE = re.compile(
+    r'(?i)\b('
+    r'bol\s+pricing|vendor\s+pricing|temporary\s+pricing|fleet\s+pricing|'
+    r'rack\s+pricing|site\s+pricing|card\s+pricing|contract\s+pricing|'
+    r'cost\s*\+\s*pricing|cost\s*plus\s+pricing|'
+    r'pricing\s+feature|pricing\s+module|pricing\s+configuration|'
+    r'pricing\s+settings?|pricing\s+page|pricing\s+tab|pricing\s+screen|'
+    r'pricing\s+workflow|pricing\s+overview|pricing\s+guide|pricing\s+type|'
+    r'pricing\s+model|pricing\s+option|pricing\s+rule|pricing\s+logic|'
+    r'pricing\s+engine|pricing\s+setup|pricing\s+functionality|'
+    r'pricing\s+document|pricing\s+spec|'
+    r'price\s+type|price\s+code|price\s+book|price\s+group|price\s+level|'
+    r'price\s+schedule|price\s+rule|price\s+list|'
+    r'navigate\s+to\s+pricing|go\s+to\s+pricing|open\s+pricing|'
+    r'pricing\s+section|pricing\s+field|pricing\s+form'
+    r')\b'
+)
+
 # Security scanning regex patterns grouped by category
 SECURITY_PATTERNS = {
     "api_keys_tokens": {
@@ -74,7 +94,8 @@ SECURITY_PATTERNS = {
         "severity": "High",
         "patterns": [
             (re.compile(r'(?i)(account[_\s]?number|acct[_\s]?no|acct[_\s]?#)\s*[=:#]?\s*([A-Z0-9\-]{4,})'), "Account Number"),
-            (re.compile(r'\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Z|a-z]{2,}\b'), "Email Address"),
+            # @fleetpanda.com excluded — internal company addresses
+            (re.compile(r'\b[A-Za-z0-9._%+\-]+@(?!fleetpanda\.com\b)[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b'), "Email Address"),
             (re.compile(r'(?i)(ssn|social[_\s]?security)\s*[=:#]?\s*\d{3}[-\s]?\d{2}[-\s]?\d{4}'), "SSN"),
             (re.compile(r'\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b'), "Phone Number"),
             (re.compile(r'(?i)(contract[_\s]?value|deal[_\s]?value|contract[_\s]?amount)\s*[=:$]?\s*\$?\d[\d,]*'), "Contract Value"),

@@ -140,11 +140,12 @@
     }
     .stat-chip .val { font-size: 28px; font-weight: 700; }
     .stat-chip .lbl { font-size: 12px; color: #64748b; margin-top: 4px; }
-    .chip-total .val { color: #7c6af7; }
-    .chip-high   .val { color: #f87171; }
-    .chip-medium .val { color: #fb923c; }
-    .chip-low    .val { color: #facc15; }
-    .chip-safe   .val { color: #4ade80; }
+    .chip-total   .val { color: #7c6af7; }
+    .chip-high    .val { color: #f87171; }
+    .chip-medium  .val { color: #fb923c; }
+    .chip-low     .val { color: #facc15; }
+    .chip-safe    .val { color: #4ade80; }
+    .chip-error   .val { color: #94a3b8; }
 
     /* ── Results list ── */
     #resultsList { display: flex; flex-direction: column; gap: 16px; }
@@ -177,6 +178,7 @@
     .risk-Medium { background: #7c2d12; color: #fdba74; }
     .risk-Low    { background: #713f12; color: #fde047; }
     .risk-Safe   { background: #14532d; color: #86efac; }
+    .risk-Error  { background: #1e293b; color: #94a3b8; }
 
     .file-name { font-size: 14px; font-weight: 600; flex: 1; word-break: break-all; }
     .file-path { font-size: 12px; color: #475569; }
@@ -320,6 +322,7 @@
     <div class="stat-chip chip-medium"><div class="val" id="statMed">0</div><div class="lbl">Medium Risk</div></div>
     <div class="stat-chip chip-low"><div class="val" id="statLow">0</div><div class="lbl">Low Risk</div></div>
     <div class="stat-chip chip-safe"><div class="val" id="statSafe">0</div><div class="lbl">Safe</div></div>
+    <div class="stat-chip chip-error"><div class="val" id="statError">0</div><div class="lbl">Unreadable</div></div>
   </div>
 
   <!-- Download -->
@@ -337,7 +340,7 @@
 
 <script>
   let evtSource = null;
-  const counts = { total: 0, High: 0, Medium: 0, Low: 0, Safe: 0 };
+  const counts = { total: 0, High: 0, Medium: 0, Low: 0, Safe: 0, Error: 0 };
 
   function resetUI() {
     document.getElementById('resultsList').innerHTML = '';
@@ -358,6 +361,10 @@
     document.getElementById('statMed').textContent   = counts.Medium;
     document.getElementById('statLow').textContent   = counts.Low;
     document.getElementById('statSafe').textContent  = counts.Safe;
+    document.getElementById('statError').textContent = counts.Error;
+    // Hide Unreadable chip if none
+    document.getElementById('statError').closest('.stat-chip').style.display =
+      counts.Error > 0 ? '' : 'none';
   }
 
   function logStatus(msg) {

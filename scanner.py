@@ -2,14 +2,15 @@ import re
 from dataclasses import dataclass, field
 from typing import Literal
 
-from config import TENANT_NAMES, SECURITY_PATTERNS
+from config import TENANT_NAMES, SECURITY_PATTERNS, FEATURE_PRICING_EXCLUSION_RE
 
 Severity = Literal["High", "Medium", "Low"]
-RiskRating = Literal["Safe", "Low", "Medium", "High"]
+RiskRating = Literal["Safe", "Low", "Medium", "High", "Error"]
 
-# Scan in 400 KB chunks with 5 KB overlap so matches near boundaries aren't missed
 _CHUNK_SIZE = 400_000
 _OVERLAP = 5_000
+# Context window (chars each side) used to check for feature-pricing phrases
+_PRICING_CONTEXT_WINDOW = 150
 
 
 @dataclass
@@ -56,7 +57,6 @@ def _get_excerpt(text: str, start: int, end: int, context: int = 80) -> str:
 
 
 def _chunks(text: str):
-    """Yield overlapping chunks of text for scanning large documents."""
     if len(text) <= _CHUNK_SIZE:
         yield text
         return
@@ -69,8 +69,15 @@ def _chunks(text: str):
         start = end - _OVERLAP
 
 
+def _is_feature_pricing_context(chunk: str, match_start: int, match_end: int) -> bool:
+    """True if the match sits within a feature-documentation pricing phrase context."""
+    ctx_start = max(0, match_start - _PRICING_CONTEXT_WINDOW)
+    ctx_end = min(len(chunk), match_end + _PRICING_CONTEXT_WINDOW)
+    context = chunk[ctx_start:ctx_end]
+    return bool(FEATURE_PRICING_EXCLUSION_RE.search(context))
+
+
 def scan_tenants(text: str) -> list[TenantMatch]:
-    # Aggregate counts across all chunks, deduplicate excerpts
     agg: dict[str, dict] = {}
     for chunk in _chunks(text):
         for tenant in TENANT_NAMES:
@@ -84,7 +91,6 @@ def scan_tenants(text: str) -> list[TenantMatch]:
                 excerpt = _get_excerpt(chunk, m.start(), m.end())
                 if excerpt not in entry["excerpts"]:
                     entry["excerpts"].append(excerpt)
-
     return [
         TenantMatch(tenant_name=name, occurrences=d["occurrences"], excerpts=d["excerpts"][:3])
         for name, d in agg.items()
@@ -101,7 +107,11 @@ def scan_security(text: str) -> list[SecurityFinding]:
             for pattern, label in meta["patterns"]:
                 for match in pattern.finditer(chunk):
                     full_match = match.group(0)
-                    # Deduplicate by (category, label, first-40-chars-of-match)
+
+                    # Suppress pricing findings that are feature-documentation context
+                    if category == "internal_pricing" and _is_feature_pricing_context(chunk, match.start(), match.end()):
+                        continue
+
                     dedup_key = f"{category}|{label}|{full_match[:40]}"
                     if dedup_key in seen_keys:
                         continue
@@ -144,6 +154,8 @@ def compute_risk_rating(findings: list[SecurityFinding]) -> RiskRating:
 
 
 def build_recommendation(risk: RiskRating, findings: list[SecurityFinding], matches: list[TenantMatch]) -> str:
+    if risk == "Error":
+        return "Could not be read — manual review required."
     if risk == "Safe" and not matches:
         return "Clear for human review."
     if risk in ("High", "Medium"):
@@ -158,10 +170,12 @@ def build_recommendation(risk: RiskRating, findings: list[SecurityFinding], matc
 
 def scan_document(file_name: str, text: str) -> ScanResult:
     if text.startswith("[EXTRACTION ERROR"):
-        result = ScanResult(file_name=file_name, extraction_error=True)
-        result.overall_risk = "High"
-        result.recommendation = "Hold for redaction — document could not be extracted for scanning."
-        return result
+        return ScanResult(
+            file_name=file_name,
+            extraction_error=True,
+            overall_risk="Error",
+            recommendation="Could not be read — manual review required.",
+        )
 
     tenant_matches = scan_tenants(text)
     security_findings = scan_security(text)
